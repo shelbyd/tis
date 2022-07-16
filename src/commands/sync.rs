@@ -43,6 +43,7 @@ impl SyncOptions {
             let mut confirm = dialoguer::Confirm::new();
             confirm
                 .default(false)
+                .wait_for_newline(true)
                 .with_prompt(format!("Force push {0} to origin/{0}?", branch));
 
             if confirm.interact()? {
