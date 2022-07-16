@@ -35,3 +35,11 @@ pub fn git_raw(command: &str, args: &[String]) -> anyhow::Result<Output> {
 pub fn is_working_directory_clean() -> anyhow::Result<bool> {
     Ok(git("status", ["--porcelain"])?.is_empty())
 }
+
+pub fn user_confirm(prompt: impl Into<String>) -> anyhow::Result<bool> {
+    Ok(dialoguer::Confirm::new()
+        .default(false)
+        .wait_for_newline(true)
+        .with_prompt(prompt)
+        .interact()?)
+}

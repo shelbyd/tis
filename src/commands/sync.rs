@@ -40,13 +40,7 @@ impl SyncOptions {
                 continue;
             }
 
-            let mut confirm = dialoguer::Confirm::new();
-            confirm
-                .default(false)
-                .wait_for_newline(true)
-                .with_prompt(format!("Force push {0} to origin/{0}?", branch));
-
-            if confirm.interact()? {
+            if user_confirm(format!("Force push {0} to origin/{0}?", branch))? {
                 log::warn!("Pushing local branch '{}'", branch);
                 git("push", ["--force", "origin", branch])?;
             }
