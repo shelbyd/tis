@@ -7,4 +7,6 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.58"
+log = "0.4.17"
+stderrlog = "0.5.3"
 structopt = "0.3.26"

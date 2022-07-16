@@ -25,6 +25,8 @@ pub fn git<S: AsRef<str>>(
 }
 
 pub fn git_raw(command: &str, args: &[String]) -> anyhow::Result<Output> {
+    log::info!("git {} {}", command, args.join(" "));
+
     Ok(std::process::Command::new("git")
         .args([command].into_iter().chain(args.iter().map(|s| s.as_str())))
         .output()?)

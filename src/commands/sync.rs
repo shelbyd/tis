@@ -37,6 +37,7 @@ impl SyncOptions {
                 continue;
             }
 
+            log::warn!("Pushing local branch '{}'", branch);
             git("push", ["--force", "origin", branch])?;
         }
 
