@@ -9,7 +9,9 @@ pub struct SyncOptions {}
 
 impl SyncOptions {
     pub fn perform(&self) -> anyhow::Result<()> {
+        log::info!("Fetching remote");
         git("fetch", ["--prune"])?;
+        log::info!("Remote fetched");
 
         ensure!(
             is_working_directory_clean()?,
@@ -34,11 +36,19 @@ impl SyncOptions {
             let local_commit = git("rev-parse", [&branch])?;
             let remote_commit = git("rev-parse", [&remote])?;
             if local_commit.trim() == remote_commit.trim() {
+                log::info!("Local branch '{}' matches remote, continuing", branch);
                 continue;
             }
 
-            log::warn!("Pushing local branch '{}'", branch);
-            git("push", ["--force", "origin", branch])?;
+            let mut confirm = dialoguer::Confirm::new();
+            confirm
+                .default(false)
+                .with_prompt(format!("Force push {0} to origin/{0}?", branch));
+
+            if confirm.interact()? {
+                log::warn!("Pushing local branch '{}'", branch);
+                git("push", ["--force", "origin", branch])?;
+            }
         }
 
         Ok(())
