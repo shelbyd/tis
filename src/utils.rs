@@ -1,6 +1,9 @@
 use std::process::Output;
 
-pub fn git<S: AsRef<str>>(command: &str, args: impl IntoIterator<Item = S>) -> anyhow::Result<String> {
+pub fn git<S: AsRef<str>>(
+    command: &str,
+    args: impl IntoIterator<Item = S>,
+) -> anyhow::Result<String> {
     let args = args
         .into_iter()
         .map(|s| String::from(s.as_ref()))
