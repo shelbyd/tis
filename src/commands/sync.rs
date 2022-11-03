@@ -1,4 +1,5 @@
 use anyhow::ensure;
+use dialoguer::*;
 use std::collections::HashSet;
 use structopt::StructOpt;
 
@@ -28,21 +29,50 @@ impl SyncOptions {
         let local_branches = all_branches.iter().filter(|s| !s.starts_with("remotes/"));
 
         for branch in local_branches {
-            let remote = match all_branches.get(&format!("remotes/origin/{}", &branch)) {
-                Some(r) => r,
-                None => continue,
+            let eq = self.compare_to_remote(branch)?;
+
+            let delta = match eq {
+                BranchEq::Eq => {
+                    log::info!("Local branch '{}' matches origin, continuing", branch);
+                    continue;
+                }
+                BranchEq::RemoteMissing => {
+                    let input: String = Input::new()
+                        .with_prompt(format!(
+                            "Remote does not have branch '{}'.\n\
+                               (d) Delete local\n\
+                               (p) Push to origin\n\
+                               (n) Do nothing\n",
+                            branch
+                        ))
+                        .default("n".to_string())
+                        .interact_text()?;
+                    match input.chars().next() {
+                        Some('d') => {
+                            log::warn!("Deleting local branch '{}'", branch);
+                            git("branch", ["-D", branch])?;
+                        }
+                        Some('p') => todo!("push to origin"),
+                        Some('n') => {}
+                        c => log::warn!("Unrecognized start of input '{:?}', doing nothing", c),
+                    }
+                    continue;
+                }
+                BranchEq::NotEq(delta) => delta,
             };
 
-            let local_commit = git("rev-parse", [&branch])?;
-            let remote_commit = git("rev-parse", [&remote])?;
-            if local_commit.trim() == remote_commit.trim() {
-                log::info!("Local branch '{}' matches remote, continuing", branch);
-                continue;
-            }
-
-            if user_confirm(format!("Force push {0} to origin/{0}?", branch))? {
-                log::warn!("Pushing local branch '{}'", branch);
-                git("push", ["--force", "origin", branch])?;
+            match delta {
+                BranchDelta::LocalAhead => {
+                    log::warn!("Pushing '{}' to origin", branch);
+                    git("push", ["origin", branch])?;
+                }
+                BranchDelta::RemoteAhead => todo!("RemoteAhead"),
+                BranchDelta::Diverged => {
+                    log::warn!(
+                        "Local and origin branch '{}' have diverged. Doing nothing.",
+                        branch
+                    );
+                }
             }
         }
 
@@ -57,4 +87,49 @@ impl SyncOptions {
             .map(String::from)
             .collect())
     }
+
+    fn compare_to_remote(&self, branch: &str) -> anyhow::Result<BranchEq> {
+        let remote_branch = format!("remotes/origin/{}", branch);
+
+        let local_commit = git("rev-parse", [&branch])?;
+        let remote_commit = match git("rev-parse", [&remote_branch]) {
+            Ok(remote) => remote,
+            Err(e) if e.to_string().contains("unknown revision") => {
+                return Ok(BranchEq::RemoteMissing)
+            }
+            Err(e) => return Err(e),
+        };
+
+        if local_commit.trim() == remote_commit.trim() {
+            return Ok(BranchEq::Eq);
+        }
+
+        let local_ahead_of_remote =
+            git("merge-base", ["--is-ancestor", &remote_branch, branch]).is_ok();
+        if local_ahead_of_remote {
+            return Ok(BranchEq::NotEq(BranchDelta::LocalAhead));
+        }
+
+        let remote_ahead_of_local =
+            git("merge-base", ["--is-ancestor", branch, &remote_branch]).is_ok();
+        if remote_ahead_of_local {
+            return Ok(BranchEq::NotEq(BranchDelta::RemoteAhead));
+        }
+
+        Ok(BranchEq::NotEq(BranchDelta::Diverged))
+    }
+}
+
+#[derive(Debug)]
+enum BranchEq {
+    Eq,
+    NotEq(BranchDelta),
+    RemoteMissing,
+}
+
+#[derive(Debug)]
+enum BranchDelta {
+    LocalAhead,
+    RemoteAhead,
+    Diverged,
 }
