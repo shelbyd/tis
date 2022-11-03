@@ -33,13 +33,13 @@ impl SyncOptions {
 
             let delta = match eq {
                 BranchEq::Eq => {
-                    log::info!("Local branch '{}' matches origin, continuing", branch);
+                    log::info!("{}: Local branch matches origin, continuing", branch);
                     continue;
                 }
                 BranchEq::RemoteMissing => {
                     let input: String = Input::new()
                         .with_prompt(format!(
-                            "Remote does not have branch '{}'.\n\
+                            "{}: Remote does not have branch.\n\
                                (d) Delete local\n\
                                (p) Push to origin\n\
                                (n) Do nothing\n",
@@ -49,7 +49,7 @@ impl SyncOptions {
                         .interact_text()?;
                     match input.chars().next() {
                         Some('d') => {
-                            log::warn!("Deleting local branch '{}'", branch);
+                            log::warn!("{}: Deleting local branch", branch);
                             git("branch", ["-D", branch])?;
                         }
                         Some('p') => todo!("push to origin"),
@@ -63,15 +63,24 @@ impl SyncOptions {
 
             match delta {
                 BranchDelta::LocalAhead => {
-                    log::warn!("Pushing '{}' to origin", branch);
+                    log::warn!("{}: Pushing to origin", branch);
                     git("push", ["origin", branch])?;
                 }
-                BranchDelta::RemoteAhead => todo!("RemoteAhead"),
+                BranchDelta::RemoteAhead(commit) => {
+                    log::warn!("{}: Setting local branch to remote", branch);
+                    git("branch", ["-f", branch, &commit]).or_else(|err| {
+                        let should_pull = err
+                            .to_string()
+                            .contains("Cannot force update the current branch.");
+                        if should_pull {
+                            git("pull", ["--ff-only"])
+                        } else {
+                            Err(err)
+                        }
+                    })?;
+                }
                 BranchDelta::Diverged => {
-                    log::warn!(
-                        "Local and origin branch '{}' have diverged. Doing nothing.",
-                        branch
-                    );
+                    log::warn!("{}: Local and origin have diverged. Doing nothing.", branch);
                 }
             }
         }
@@ -113,7 +122,9 @@ impl SyncOptions {
         let remote_ahead_of_local =
             git("merge-base", ["--is-ancestor", branch, &remote_branch]).is_ok();
         if remote_ahead_of_local {
-            return Ok(BranchEq::NotEq(BranchDelta::RemoteAhead));
+            return Ok(BranchEq::NotEq(BranchDelta::RemoteAhead(
+                remote_commit.trim().to_string(),
+            )));
         }
 
         Ok(BranchEq::NotEq(BranchDelta::Diverged))
@@ -130,6 +141,6 @@ enum BranchEq {
 #[derive(Debug)]
 enum BranchDelta {
     LocalAhead,
-    RemoteAhead,
+    RemoteAhead(String),
     Diverged,
 }
