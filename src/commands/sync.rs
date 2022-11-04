@@ -52,7 +52,10 @@ impl SyncOptions {
                             log::warn!("{}: Deleting local branch", branch);
                             git("branch", ["-D", branch])?;
                         }
-                        Some('p') => todo!("push to origin"),
+                        Some('p') => {
+                            log::warn!("{}: Pushing to remote", branch);
+                            git("push", ["-u", "origin", branch])?;
+                        }
                         Some('n') => {}
                         c => log::warn!("Unrecognized start of input '{:?}', doing nothing", c),
                     }
