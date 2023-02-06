@@ -36,10 +36,15 @@ pub fn is_working_directory_clean() -> anyhow::Result<bool> {
     Ok(git("status", ["--porcelain"])?.is_empty())
 }
 
-pub fn user_confirm(prompt: impl Into<String>) -> anyhow::Result<bool> {
-    Ok(dialoguer::Confirm::new()
-        .default(false)
-        .wait_for_newline(true)
-        .with_prompt(prompt)
-        .interact()?)
+pub fn run<S>(command: &str, args: impl IntoIterator<Item = S>) -> anyhow::Result<Output>
+where
+    S: AsRef<str>,
+{
+    Ok(std::process::Command::new(command)
+        .args(
+            args.into_iter()
+                .map(|s| String::from(s.as_ref()))
+                .collect::<Vec<_>>(),
+        )
+        .output()?)
 }

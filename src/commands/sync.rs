@@ -53,8 +53,7 @@ impl SyncOptions {
                             git("branch", ["-D", branch])?;
                         }
                         Some('p') => {
-                            log::warn!("{}: Pushing to remote", branch);
-                            git("push", ["-u", "origin", branch])?;
+                            push_branch(branch)?;
                         }
                         Some('n') => {}
                         c => log::warn!("Unrecognized start of input '{:?}', doing nothing", c),
@@ -132,6 +131,27 @@ impl SyncOptions {
 
         Ok(BranchEq::NotEq(BranchDelta::Diverged))
     }
+}
+
+fn push_branch(branch: &String) -> Result<(), anyhow::Error> {
+    log::warn!("{}: Pushing to remote", branch);
+    git("push", ["-u", "origin", branch])?;
+
+    if !Confirm::new().with_prompt("Open PR?").interact()? {
+        return Ok(());
+    }
+
+    let url = git("remote", ["get-url", "origin"])?;
+    let org_repo = url
+        .trim()
+        .strip_prefix("git@github.com:")
+        .and_then(|no_prefix| no_prefix.strip_suffix(".git"))
+        .ok_or_else(|| anyhow::anyhow!("Unrecognized origin remote url {url:?}"))?;
+
+    let create_pr_url = format!("https://github.com/{org_repo}/compare/{branch}?expand=1");
+    run("xdg-open", [create_pr_url])?;
+
+    Ok(())
 }
 
 #[derive(Debug)]
