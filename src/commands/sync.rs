@@ -19,12 +19,12 @@ impl SyncOptions {
             "Cannot sync a dirty working directory"
         );
 
-        self.push_local_branches()?;
+        self.sync_local_branches()?;
 
         Ok(())
     }
 
-    fn push_local_branches(&self) -> anyhow::Result<()> {
+    fn sync_local_branches(&self) -> anyhow::Result<()> {
         let all_branches = self.all_branches()?;
         let local_branches = all_branches.iter().filter(|s| !s.starts_with("remotes/"));
 
@@ -50,6 +50,12 @@ impl SyncOptions {
                     match input.chars().next() {
                         Some('d') => {
                             log::warn!("{}: Deleting local branch", branch);
+
+                            if git("rev-parse", ["--abbrev-ref", "HEAD"])?.trim() == branch {
+                                log::warn!("Trying to delete currently checked out branch, checking out master");
+                                git("checkout", ["master"])?;
+                            }
+
                             git("branch", ["-D", branch])?;
                         }
                         Some('p') => {
