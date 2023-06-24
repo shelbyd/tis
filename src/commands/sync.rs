@@ -49,7 +49,7 @@ impl SyncOptions {
                         .interact_text()?;
                     match input.chars().next() {
                         Some('d') => {
-                            log::warn!("{}: Deleting local branch", branch);
+                            log::info!("{}: Deleting local branch", branch);
 
                             if git("rev-parse", ["--abbrev-ref", "HEAD"])?.trim() == branch {
                                 log::warn!("Trying to delete currently checked out branch, checking out master");
@@ -71,11 +71,11 @@ impl SyncOptions {
 
             match delta {
                 BranchDelta::LocalAhead => {
-                    log::warn!("{}: Pushing to origin", branch);
+                    log::info!("{}: Pushing to origin", branch);
                     git("push", ["origin", branch])?;
                 }
                 BranchDelta::RemoteAhead(commit) => {
-                    log::warn!("{}: Setting local branch to remote", branch);
+                    log::info!("{}: Setting local branch to remote", branch);
                     git("branch", ["-f", branch, &commit]).or_else(|err| {
                         let should_pull = err
                             .to_string()
@@ -140,7 +140,7 @@ impl SyncOptions {
 }
 
 fn push_branch(branch: &String) -> Result<(), anyhow::Error> {
-    log::warn!("{}: Pushing to remote", branch);
+    log::info!("{}: Pushing to remote", branch);
     git("push", ["-u", "origin", branch])?;
 
     if !Confirm::new().with_prompt("Open PR?").interact()? {
