@@ -1,6 +1,6 @@
 use anyhow::ensure;
 use dialoguer::*;
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use structopt::StructOpt;
 
 use crate::utils::*;
@@ -26,7 +26,10 @@ impl SyncOptions {
 
     fn sync_local_branches(&self) -> anyhow::Result<()> {
         let all_branches = self.all_branches()?;
-        let local_branches = all_branches.iter().filter(|s| !s.starts_with("remotes/"));
+        let local_branches: BTreeSet<_> = all_branches
+            .iter()
+            .filter(|s| !s.starts_with("remotes/"))
+            .collect();
 
         for branch in local_branches {
             let eq = self.compare_to_remote(branch)?;
