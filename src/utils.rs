@@ -1,5 +1,7 @@
 use std::process::Output;
 
+use dialoguer::Confirm;
+
 pub fn git<S: AsRef<str>>(
     command: &str,
     args: impl IntoIterator<Item = S>,
@@ -30,6 +32,28 @@ pub fn git_raw(command: &str, args: &[String]) -> anyhow::Result<Output> {
     Ok(std::process::Command::new("git")
         .args([command].into_iter().chain(args.iter().map(|s| s.as_str())))
         .output()?)
+}
+
+pub fn with_clean_directory(cb: impl FnOnce() -> anyhow::Result<()>) -> anyhow::Result<()> {
+    let mut did_stash = false;
+
+    if !is_working_directory_clean()? {
+        log::error!("Cannot sync a dirty working directory");
+        if !Confirm::new().with_prompt("Stash?").interact()? {
+            anyhow::bail!("Cannot sync a dirty working directory");
+        }
+
+        git("stash", ["push", "--include-untracked"])?;
+        did_stash = true;
+    }
+
+    let result = cb();
+
+    if did_stash {
+        git("stash", ["pop"])?;
+    }
+
+    result
 }
 
 pub fn is_working_directory_clean() -> anyhow::Result<bool> {

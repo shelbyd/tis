@@ -1,4 +1,3 @@
-use anyhow::ensure;
 use dialoguer::*;
 use std::collections::{BTreeSet, HashSet};
 use structopt::StructOpt;
@@ -14,12 +13,7 @@ impl SyncOptions {
         git("fetch", ["--prune"])?;
         log::info!("Remote fetched");
 
-        ensure!(
-            is_working_directory_clean()?,
-            "Cannot sync a dirty working directory"
-        );
-
-        self.sync_local_branches()?;
+        with_clean_directory(|| self.sync_local_branches())?;
 
         Ok(())
     }
