@@ -37,6 +37,7 @@ pub fn git_raw(command: &str, args: &[String]) -> anyhow::Result<Output> {
 pub fn with_clean_directory(cb: impl FnOnce() -> anyhow::Result<()>) -> anyhow::Result<()> {
     let mut did_stash = false;
 
+    log::info!("Checking working directory");
     if !is_working_directory_clean()? {
         log::error!("Cannot sync a dirty working directory");
         if !Confirm::new().with_prompt("Stash?").interact()? {
@@ -47,9 +48,11 @@ pub fn with_clean_directory(cb: impl FnOnce() -> anyhow::Result<()>) -> anyhow::
         did_stash = true;
     }
 
+    log::info!("Working directory is now clean");
     let result = cb();
 
     if did_stash {
+        log::info!("Popping stash");
         git("stash", ["pop"])?;
     }
 
