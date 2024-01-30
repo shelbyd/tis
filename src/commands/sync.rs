@@ -5,7 +5,10 @@ use structopt::StructOpt;
 use crate::utils::*;
 
 #[derive(StructOpt, Debug)]
-pub struct SyncOptions {}
+pub struct SyncOptions {
+    #[structopt(default_value = "master")]
+    master: String,
+}
 
 impl SyncOptions {
     pub fn perform(&self) -> anyhow::Result<()> {
@@ -28,6 +31,37 @@ impl SyncOptions {
         for branch in local_branches {
             let eq = self.compare_to_remote(branch)?;
 
+            if branch == &self.master {
+                match eq {
+                    BranchEq::RemoteMissing => {
+                        anyhow::bail!("Remote branch {} missing", self.master);
+                    }
+
+                    BranchEq::NotEq(BranchDelta::LocalAhead) => {
+                        let prompt = format!(
+                            "Local branch {} ahead of origin. Reset to origin?",
+                            self.master
+                        );
+                        if Confirm::new().with_prompt(prompt).interact()? {
+                            set_local_to(&branch, &format!("origin/{}", branch))?;
+                            continue;
+                        }
+                    }
+                    BranchEq::NotEq(BranchDelta::Diverged) => {
+                        let prompt = format!(
+                            "Local branch {} diverged from origin. Reset to origin?",
+                            self.master
+                        );
+                        if Confirm::new().with_prompt(prompt).interact()? {
+                            set_local_to(&branch, &format!("origin/{}", branch))?;
+                            continue;
+                        }
+                    }
+
+                    BranchEq::NotEq(BranchDelta::RemoteAhead(_)) | BranchEq::Eq => {}
+                }
+            }
+
             let delta = match eq {
                 BranchEq::Eq => {
                     log::info!("{}: Local branch matches origin, continuing", branch);
@@ -49,8 +83,8 @@ impl SyncOptions {
                             log::info!("{}: Deleting local branch", branch);
 
                             if git("rev-parse", ["--abbrev-ref", "HEAD"])?.trim() == branch {
-                                log::warn!("Trying to delete currently checked out branch, checking out master");
-                                git("checkout", ["master"])?;
+                                log::warn!("Trying to delete currently checked out branch, checking out {}", self.master);
+                                git("checkout", [&self.master])?;
                             }
 
                             git("branch", ["-D", branch])?;
@@ -72,17 +106,7 @@ impl SyncOptions {
                     git("push", ["origin", branch])?;
                 }
                 BranchDelta::RemoteAhead(commit) => {
-                    log::info!("{}: Setting local branch to remote", branch);
-                    git("branch", ["-f", branch, &commit]).or_else(|err| {
-                        let should_pull = err
-                            .to_string()
-                            .contains("Cannot force update the current branch.");
-                        if should_pull {
-                            git("pull", ["--ff-only"])
-                        } else {
-                            Err(err)
-                        }
-                    })?;
+                    set_local_to(branch, &commit)?;
                 }
                 BranchDelta::Diverged => {
                     log::warn!("{}: Local and origin have diverged. Doing nothing.", branch);
@@ -134,6 +158,21 @@ impl SyncOptions {
 
         Ok(BranchEq::NotEq(BranchDelta::Diverged))
     }
+}
+
+fn set_local_to(branch: &str, git_ref: &str) -> Result<(), anyhow::Error> {
+    log::info!("{}: Setting local branch to remote", branch);
+    git("branch", ["-f", branch, git_ref]).or_else(|err| {
+        let should_pull = err
+            .to_string()
+            .contains("Cannot force update the current branch.");
+        if should_pull {
+            git("pull", ["--ff-only"])
+        } else {
+            Err(err)
+        }
+    })?;
+    Ok(())
 }
 
 fn push_branch(branch: &String) -> Result<(), anyhow::Error> {
