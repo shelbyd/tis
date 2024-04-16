@@ -6,8 +6,7 @@ use crate::utils::*;
 
 #[derive(StructOpt, Debug)]
 pub struct SyncOptions {
-    #[structopt(default_value = "master")]
-    master: String,
+    master: Option<String>,
 }
 
 impl SyncOptions {
@@ -22,6 +21,21 @@ impl SyncOptions {
     }
 
     fn sync_local_branches(&self) -> anyhow::Result<()> {
+        let master = match &self.master {
+            Some(m) => m.clone(),
+            None => {
+                let remote = git("remote", ["show", "origin"])?;
+
+                let Some(captures) = regex::Regex::new("HEAD branch: (.+)")?.captures(&remote)
+                else {
+                    anyhow::bail!("HEAD branch not found in `git remote show origin`");
+                };
+
+                captures[1].to_string()
+            }
+        };
+        log::info!("Master branch: {master:?}");
+
         let all_branches = self.all_branches()?;
         let local_branches: BTreeSet<_> = all_branches
             .iter()
@@ -31,17 +45,15 @@ impl SyncOptions {
         for branch in local_branches {
             let eq = self.compare_to_remote(branch)?;
 
-            if branch == &self.master {
+            if branch == &master {
                 match eq {
                     BranchEq::RemoteMissing => {
-                        anyhow::bail!("Remote branch {} missing", self.master);
+                        anyhow::bail!("Remote branch {} missing", master);
                     }
 
                     BranchEq::NotEq(BranchDelta::LocalAhead) => {
-                        let prompt = format!(
-                            "Local branch {} ahead of origin. Reset to origin?",
-                            self.master
-                        );
+                        let prompt =
+                            format!("Local branch {} ahead of origin. Reset to origin?", master);
                         if Confirm::new().with_prompt(prompt).interact()? {
                             set_local_to(&branch, &format!("origin/{}", branch))?;
                             continue;
@@ -50,7 +62,7 @@ impl SyncOptions {
                     BranchEq::NotEq(BranchDelta::Diverged) => {
                         let prompt = format!(
                             "Local branch {} diverged from origin. Reset to origin?",
-                            self.master
+                            master
                         );
                         if Confirm::new().with_prompt(prompt).interact()? {
                             set_local_to(&branch, &format!("origin/{}", branch))?;
@@ -83,8 +95,8 @@ impl SyncOptions {
                             log::info!("{}: Deleting local branch", branch);
 
                             if git("rev-parse", ["--abbrev-ref", "HEAD"])?.trim() == branch {
-                                log::warn!("Trying to delete currently checked out branch, checking out {}", self.master);
-                                git("checkout", [&self.master])?;
+                                log::warn!("Trying to delete currently checked out branch, checking out {}", master);
+                                git("checkout", [&master])?;
                             }
 
                             git("branch", ["-D", branch])?;
