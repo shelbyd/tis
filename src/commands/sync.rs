@@ -189,6 +189,14 @@ fn push_branch(branch: &String) -> Result<(), anyhow::Error> {
     log::info!("{}: Pushing to remote", branch);
     git("push", ["-u", "origin", branch])?;
 
+    let open = ["xdg-open", "open"]
+        .iter()
+        .find(|cmd| run("which", [cmd]).is_ok_and(|o| o.status.success()));
+    let Some(open) = open else {
+        log::warn!("No command found to open PR");
+        return Ok(());
+    };
+
     if !Confirm::new().with_prompt("Open PR?").interact()? {
         return Ok(());
     }
@@ -201,7 +209,7 @@ fn push_branch(branch: &String) -> Result<(), anyhow::Error> {
         .ok_or_else(|| anyhow::anyhow!("Unrecognized origin remote url {url:?}"))?;
 
     let create_pr_url = format!("https://github.com/{org_repo}/compare/{branch}?expand=1");
-    run("xdg-open", [create_pr_url])?;
+    run(open, [create_pr_url])?;
 
     Ok(())
 }
