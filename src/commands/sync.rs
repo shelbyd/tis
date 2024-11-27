@@ -175,9 +175,7 @@ impl SyncOptions {
 fn set_local_to(branch: &str, git_ref: &str) -> Result<(), anyhow::Error> {
     log::info!("{}: Setting local branch to remote", branch);
     git("branch", ["-f", branch, git_ref]).or_else(|err| {
-        let should_pull = err
-            .to_string()
-            .contains("Cannot force update the current branch.");
+        let should_pull = err.to_string().contains("cannot force update the branch");
         if should_pull {
             git("pull", ["--ff-only"])
         } else {
